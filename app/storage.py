@@ -9,12 +9,13 @@ DATA_DIR = BASE_DIR / "data"
 LOGS_FILE = DATA_DIR / "logs.jsonl"
 METRICS_FILE = DATA_DIR / "metrics.jsonl"
 TRACES_FILE = DATA_DIR / "traces.jsonl"
+INCIDENTS_FILE = DATA_DIR / "incidents.jsonl"
 
 
 def ensure_data_files_exist() -> None:
     DATA_DIR.mkdir(exist_ok=True)
 
-    for file_path in [LOGS_FILE, METRICS_FILE, TRACES_FILE]:
+    for file_path in [LOGS_FILE, METRICS_FILE, TRACES_FILE, INCIDENTS_FILE]:
         file_path.touch(exist_ok=True)
 
 
@@ -35,6 +36,10 @@ def write_metric_event(event: Dict[str, Any]) -> None:
 
 def write_trace_event(event: Dict[str, Any]) -> None:
     append_event(TRACES_FILE, event)
+
+
+def write_incident(event: Dict[str, Any]) -> None:
+    append_event(INCIDENTS_FILE, event)
 
 
 def read_jsonl(file_path: Path) -> List[Dict[str, Any]]:
@@ -60,3 +65,7 @@ def read_metrics() -> List[Dict[str, Any]]:
 
 def read_traces() -> List[Dict[str, Any]]:
     return read_jsonl(TRACES_FILE)
+
+
+def read_incidents() -> List[Dict[str, Any]]:
+    return read_jsonl(INCIDENTS_FILE)
