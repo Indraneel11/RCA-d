@@ -2,8 +2,13 @@ import random
 import uuid
 from typing import List
 
+from app.kafka_producer import (
+    flush_events,
+    publish_log_event,
+    publish_metric_event,
+    publish_trace_event,
+)
 from app.telemetry_schema import LogEvent, MetricEvent, TraceEvent, current_timestamp
-from app.storage import write_log_event, write_metric_event, write_trace_event
 
 
 SERVICES = [
@@ -30,7 +35,7 @@ def create_log(service_name: str, level: str, message: str, trace_id: str) -> No
         trace_id=trace_id
     )
 
-    write_log_event(log.model_dump())
+    publish_log_event(log.model_dump())
 
 
 def create_metric(service_name: str, metric_name: str, value: float, unit: str) -> None:
@@ -42,7 +47,7 @@ def create_metric(service_name: str, metric_name: str, value: float, unit: str) 
         unit=unit
     )
 
-    write_metric_event(metric.model_dump())
+    publish_metric_event(metric.model_dump())
 
 
 def create_trace(
@@ -65,7 +70,7 @@ def create_trace(
         status=status
     )
 
-    write_trace_event(trace.model_dump())
+    publish_trace_event(trace.model_dump())
 
 
 def simulate_request() -> dict:
@@ -193,5 +198,7 @@ def simulate_requests(count: int) -> List[dict]:
     for _ in range(count):
         result = simulate_request()
         results.append(result)
+
+    flush_events()
 
     return results
