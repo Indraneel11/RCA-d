@@ -2,3 +2,8 @@ fastapi
 uvicorn
 pydantic
 confluent-kafka
+scikit-learn
+pandas
+joblib
+google-genai
+python-dotenv

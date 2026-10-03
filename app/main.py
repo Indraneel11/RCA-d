@@ -3,6 +3,19 @@ from fastapi import FastAPI, Query
 from app.anomaly_detector import detect_anomalies
 from app.simulator import simulate_requests
 from app.storage import read_incidents, read_logs, read_metrics, read_traces
+from app.ml_detector import detect_ml_metric_anomalies, train_isolation_forest_model
+from app.rca_engine import analyze_root_causes
+from app.rca_explainer import explain_rca
+
+from pydantic import BaseModel
+
+from app.llm_query import answer_observability_question
+
+
+
+class QueryRequest(BaseModel):
+    question: str
+    minutes: int | None = None
 
 
 app = FastAPI(
@@ -30,6 +43,13 @@ def simulate(count: int = Query(default=1, ge=1, le=100)):
         "results": results
     }
 
+@app.post("/ml/train")
+def train_ml_model():
+    return train_isolation_forest_model()
+
+@app.post("/detect/ml-anomalies")
+def run_ml_anomaly_detection():
+    return detect_ml_metric_anomalies()
 
 @app.get("/logs")
 def get_logs(
@@ -107,6 +127,15 @@ def get_traces(
     }
 
 
+@app.post("/query")
+def query_observability(request: QueryRequest):
+    return answer_observability_question(
+        question=request.question,
+        minutes=request.minutes
+    )
+
+
+
 @app.post("/detect/anomalies")
 def run_anomaly_detection():
     result = detect_anomalies()
@@ -115,6 +144,16 @@ def run_anomaly_detection():
         "message": "Anomaly detection completed",
         **result
     }
+
+@app.post("/rca/analyze")
+def run_rca_analysis(minutes: int | None = Query(default=None, ge=1, le=1440)):
+    return analyze_root_causes(minutes=minutes)
+
+
+@app.post("/rca/explain")
+def explain_root_cause(minutes: int | None = Query(default=None, ge=1, le=1440)):
+    return explain_rca(minutes=minutes)
+
 
 @app.get("/incidents")
 def get_incidents(
