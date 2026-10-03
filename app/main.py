@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Query
 
-from app.anomaly_detector import detect_latency_anomalies
+from app.anomaly_detector import detect_anomalies
 from app.simulator import simulate_requests
 from app.storage import read_incidents, read_logs, read_metrics, read_traces
 
@@ -108,22 +108,21 @@ def get_traces(
 
 
 @app.post("/detect/anomalies")
-def detect_anomalies():
-    incidents = detect_latency_anomalies()
+def run_anomaly_detection():
+    result = detect_anomalies()
 
     return {
         "message": "Anomaly detection completed",
-        "incidents_created": len(incidents),
-        "incidents": incidents
+        **result
     }
-
 
 @app.get("/incidents")
 def get_incidents(
     limit: int = Query(default=20, ge=1, le=500),
     service_name: str | None = None,
     severity: str | None = None,
-    status: str | None = None
+    status: str | None = None,
+    anomaly_type: str | None = None
 ):
     incidents = read_incidents()
 
@@ -145,11 +144,16 @@ def get_incidents(
             if incident.get("status") == status
         ]
 
+    if anomaly_type:
+        incidents = [
+            incident for incident in incidents
+            if incident.get("anomaly_type") == anomaly_type
+        ]
+
     return {
         "count": min(limit, len(incidents)),
         "incidents": incidents[-limit:]
     }
-
 
 @app.get("/telemetry/summary")
 def telemetry_summary():
