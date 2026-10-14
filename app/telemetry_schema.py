@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -23,6 +24,7 @@ class MetricEvent(BaseModel):
     metric_name: str
     value: float
     unit: str
+    trace_id: Optional[str] = None
 
 
 class TraceEvent(BaseModel):

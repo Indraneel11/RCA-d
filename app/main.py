@@ -1,16 +1,13 @@
 from fastapi import FastAPI, Query
+from pydantic import BaseModel
 
 from app.anomaly_detector import detect_anomalies
-from app.simulator import simulate_requests
-from app.storage import read_incidents, read_logs, read_metrics, read_traces
+from app.llm_query import answer_observability_question
 from app.ml_detector import detect_ml_metric_anomalies, train_isolation_forest_model
 from app.rca_engine import analyze_root_causes
 from app.rca_explainer import explain_rca
-
-from pydantic import BaseModel
-
-from app.llm_query import answer_observability_question
-
+from app.simulator import simulate_requests
+from app.storage import read_incidents, read_logs, read_metrics, read_traces
 
 
 class QueryRequest(BaseModel):
@@ -21,7 +18,7 @@ class QueryRequest(BaseModel):
 app = FastAPI(
     title="RCA'd Observability Platform",
     description="AI-driven observability platform with root cause analysis",
-    version="0.1.0"
+    version="0.1.0",
 )
 
 
@@ -29,7 +26,7 @@ app = FastAPI(
 def health_check():
     return {
         "status": "healthy",
-        "service": "rcad-api"
+        "service": "rcad-api",
     }
 
 
@@ -40,23 +37,26 @@ def simulate(count: int = Query(default=1, ge=1, le=100)):
     return {
         "message": "Simulation completed",
         "requests_simulated": count,
-        "results": results
+        "results": results,
     }
+
 
 @app.post("/ml/train")
 def train_ml_model():
     return train_isolation_forest_model()
 
+
 @app.post("/detect/ml-anomalies")
 def run_ml_anomaly_detection():
     return detect_ml_metric_anomalies()
+
 
 @app.get("/logs")
 def get_logs(
     limit: int = Query(default=20, ge=1, le=500),
     service_name: str | None = None,
     level: str | None = None,
-    trace_id: str | None = None
+    trace_id: str | None = None,
 ):
     logs = read_logs()
 
@@ -71,7 +71,7 @@ def get_logs(
 
     return {
         "count": min(limit, len(logs)),
-        "logs": logs[-limit:]
+        "logs": logs[-limit:],
     }
 
 
@@ -80,22 +80,31 @@ def get_metrics(
     limit: int = Query(default=20, ge=1, le=500),
     service_name: str | None = None,
     metric_name: str | None = None,
-    unit: str | None = None
+    unit: str | None = None,
 ):
     metrics = read_metrics()
 
     if service_name:
-        metrics = [metric for metric in metrics if metric.get("service_name") == service_name]
+        metrics = [
+            metric for metric in metrics
+            if metric.get("service_name") == service_name
+        ]
 
     if metric_name:
-        metrics = [metric for metric in metrics if metric.get("metric_name") == metric_name]
+        metrics = [
+            metric for metric in metrics
+            if metric.get("metric_name") == metric_name
+        ]
 
     if unit:
-        metrics = [metric for metric in metrics if metric.get("unit") == unit]
+        metrics = [
+            metric for metric in metrics
+            if metric.get("unit") == unit
+        ]
 
     return {
         "count": min(limit, len(metrics)),
-        "metrics": metrics[-limit:]
+        "metrics": metrics[-limit:],
     }
 
 
@@ -105,25 +114,37 @@ def get_traces(
     trace_id: str | None = None,
     service_name: str | None = None,
     status: str | None = None,
-    operation: str | None = None
+    operation: str | None = None,
 ):
     traces = read_traces()
 
     if trace_id:
-        traces = [trace for trace in traces if trace.get("trace_id") == trace_id]
+        traces = [
+            trace for trace in traces
+            if trace.get("trace_id") == trace_id
+        ]
 
     if service_name:
-        traces = [trace for trace in traces if trace.get("service_name") == service_name]
+        traces = [
+            trace for trace in traces
+            if trace.get("service_name") == service_name
+        ]
 
     if status:
-        traces = [trace for trace in traces if trace.get("status") == status]
+        traces = [
+            trace for trace in traces
+            if trace.get("status") == status
+        ]
 
     if operation:
-        traces = [trace for trace in traces if trace.get("operation") == operation]
+        traces = [
+            trace for trace in traces
+            if trace.get("operation") == operation
+        ]
 
     return {
         "count": min(limit, len(traces)),
-        "traces": traces[-limit:]
+        "traces": traces[-limit:],
     }
 
 
@@ -131,9 +152,8 @@ def get_traces(
 def query_observability(request: QueryRequest):
     return answer_observability_question(
         question=request.question,
-        minutes=request.minutes
+        minutes=request.minutes,
     )
-
 
 
 @app.post("/detect/anomalies")
@@ -142,17 +162,24 @@ def run_anomaly_detection():
 
     return {
         "message": "Anomaly detection completed",
-        **result
+        **result,
     }
 
+
 @app.post("/rca/analyze")
-def run_rca_analysis(minutes: int | None = Query(default=None, ge=1, le=1440)):
-    return analyze_root_causes(minutes=minutes)
+def run_rca_analysis(
+    minutes: int | None = Query(default=None, ge=1, le=1440),
+    trace_id: str | None = None,
+):
+    return analyze_root_causes(minutes=minutes, trace_id=trace_id)
 
 
 @app.post("/rca/explain")
-def explain_root_cause(minutes: int | None = Query(default=None, ge=1, le=1440)):
-    return explain_rca(minutes=minutes)
+def explain_root_cause(
+    minutes: int | None = Query(default=None, ge=1, le=1440),
+    trace_id: str | None = None,
+):
+    return explain_rca(minutes=minutes, trace_id=trace_id)
 
 
 @app.get("/incidents")
@@ -161,7 +188,7 @@ def get_incidents(
     service_name: str | None = None,
     severity: str | None = None,
     status: str | None = None,
-    anomaly_type: str | None = None
+    anomaly_type: str | None = None,
 ):
     incidents = read_incidents()
 
@@ -191,8 +218,9 @@ def get_incidents(
 
     return {
         "count": min(limit, len(incidents)),
-        "incidents": incidents[-limit:]
+        "incidents": incidents[-limit:],
     }
+
 
 @app.get("/telemetry/summary")
 def telemetry_summary():
@@ -202,7 +230,10 @@ def telemetry_summary():
     incidents = read_incidents()
 
     error_logs = [log for log in logs if log.get("level") == "ERROR"]
-    failed_traces = [trace for trace in traces if trace.get("status") == "error"]
+    failed_traces = [
+        trace for trace in traces
+        if trace.get("status") == "error"
+    ]
 
     services = set()
 
@@ -224,5 +255,5 @@ def telemetry_summary():
         "total_incidents": len(incidents),
         "error_logs": len(error_logs),
         "failed_trace_spans": len(failed_traces),
-        "services_observed": sorted(services)
+        "services_observed": sorted(services),
     }

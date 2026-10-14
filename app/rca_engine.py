@@ -44,11 +44,36 @@ def get_confidence(score: int) -> str:
     return "LOW"
 
 
-def analyze_root_causes(minutes: int | None = None) -> Dict:
+def analyze_root_causes(
+    minutes: int | None = None,
+    trace_id: str | None = None,
+) -> Dict:
     incidents = filter_by_time_window(read_incidents(), minutes)
     logs = filter_by_time_window(read_logs(), minutes)
     metrics = filter_by_time_window(read_metrics(), minutes)
     traces = filter_by_time_window(read_traces(), minutes)
+
+    if trace_id is not None:
+        logs = [
+            log for log in logs
+            if log.get("trace_id") == trace_id
+        ]
+
+        traces = [
+            span for span in traces
+            if span.get("trace_id") == trace_id
+        ]
+
+        incidents = [
+            incident for incident in incidents
+            if incident.get("trace_id") == trace_id
+            or (incident.get("evidence") or {}).get("trace_id") == trace_id
+        ]
+
+        metrics = [
+            metric for metric in metrics
+            if metric.get("trace_id") == trace_id
+        ]
 
     service_scores = {}
 
@@ -99,6 +124,17 @@ def analyze_root_causes(minutes: int | None = None) -> Dict:
                 f"Incident detected: {anomaly_type}"
             )
 
+    # Match ERROR logs to failed spans from the same service and trace.
+    failed_trace_keys = {
+        (trace.get("service_name"), trace.get("trace_id"))
+        for trace in traces
+        if trace.get("status") == "error"
+        and trace.get("service_name")
+        and trace.get("trace_id")
+    }
+
+    scored_error_trace_keys = set()
+
     for log in logs:
         service_name = log.get("service_name")
         level = log.get("level")
@@ -110,9 +146,31 @@ def analyze_root_causes(minutes: int | None = None) -> Dict:
         ensure_service(service_name)
         candidate = service_scores[service_name]
 
-        candidate["score"] += 3
+        # Count every ERROR log as evidence, even if scoring is deduplicated.
         candidate["evidence"]["error_log_count"] += 1
-        candidate["reasons"].append(f"ERROR log found: {message}")
+
+        log_trace_id = log.get("trace_id")
+        log_key = (service_name, log_trace_id)
+
+        # Repeated ERROR logs from one service in one trace contribute
+        # only one scoring signal.
+        if log_trace_id:
+            if log_key in scored_error_trace_keys:
+                continue
+
+            scored_error_trace_keys.add(log_key)
+
+        correlated = (
+            bool(log_trace_id)
+            and log_key in failed_trace_keys
+        )
+        points = 3 if correlated else 1
+
+        candidate["score"] += points
+        candidate["reasons"].append(
+            f"{'Trace-correlated' if correlated else 'Uncorrelated'} "
+            f"ERROR log found: {message}"
+        )
 
     for trace in traces:
         service_name = trace.get("service_name")
@@ -155,7 +213,6 @@ def analyze_root_causes(minutes: int | None = None) -> Dict:
             f"High latency metric found: {value:.2f}ms"
         )
 
-    # Add a bounded bonus for observed failed call chains.
     graph_evidence = correlate_failed_calls(traces)
 
     for service_name, evidence in graph_evidence.items():
@@ -174,7 +231,6 @@ def analyze_root_causes(minutes: int | None = None) -> Dict:
             evidence["upstream_failed_services"]
         )
 
-        # Put this first so it remains visible after reasons are limited to 10.
         candidate["reasons"].insert(
             0,
             "Failed call chain observed from "
@@ -198,7 +254,6 @@ def analyze_root_causes(minutes: int | None = None) -> Dict:
 
         root_cause["reasons"] = unique_reasons[:10]
 
-    # Score is primary. Use observed upstream failures to break equal scores.
     root_causes.sort(
         key=lambda item: (
             item["score"],
@@ -210,6 +265,7 @@ def analyze_root_causes(minutes: int | None = None) -> Dict:
     return {
         "message": "RCA analysis completed",
         "time_window_minutes": minutes,
+        "trace_id": trace_id,
         "events_analyzed": {
             "incidents": len(incidents),
             "logs": len(logs),

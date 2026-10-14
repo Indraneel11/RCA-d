@@ -43,6 +43,7 @@ def create_metric(
     metric_name: str,
     value: float,
     unit: str,
+    trace_id: str,
 ) -> None:
     metric = MetricEvent(
         timestamp=current_timestamp(),
@@ -50,6 +51,7 @@ def create_metric(
         metric_name=metric_name,
         value=value,
         unit=unit,
+        trace_id=trace_id,
     )
 
     publish_metric_event(metric.model_dump())
@@ -129,6 +131,7 @@ def simulate_request() -> dict:
         "latency_ms",
         frontend_latency,
         "ms",
+        trace_id,
     )
 
     # The order cannot complete if either order processing or payment fails.
@@ -164,6 +167,7 @@ def simulate_request() -> dict:
         "latency_ms",
         order_latency,
         "ms",
+        trace_id,
     )
 
     # An order processing failure happens before the payment call.
@@ -208,6 +212,7 @@ def simulate_request() -> dict:
         "latency_ms",
         payment_latency,
         "ms",
+        trace_id,
     )
 
     return {
