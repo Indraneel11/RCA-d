@@ -6,7 +6,7 @@ from app.llm_query import answer_observability_question
 from app.ml_detector import detect_ml_metric_anomalies, train_isolation_forest_model
 from app.rca_engine import analyze_root_causes
 from app.rca_explainer import explain_rca
-from app.simulator import simulate_requests
+from app.simulator import FailureType, simulate_requests
 from app.storage import read_incidents, read_logs, read_metrics, read_traces
 
 
@@ -31,8 +31,11 @@ def health_check():
 
 
 @app.post("/simulate")
-def simulate(count: int = Query(default=1, ge=1, le=100)):
-    results = simulate_requests(count)
+def simulate(
+    count: int = Query(default=1, ge=1, le=100),
+    failure_type: FailureType | None = Query(default=None),
+):
+    results = simulate_requests(count, failure_type=failure_type)
 
     return {
         "message": "Simulation completed",
@@ -81,6 +84,7 @@ def get_metrics(
     service_name: str | None = None,
     metric_name: str | None = None,
     unit: str | None = None,
+    trace_id: str | None = None,
 ):
     metrics = read_metrics()
 
@@ -100,6 +104,12 @@ def get_metrics(
         metrics = [
             metric for metric in metrics
             if metric.get("unit") == unit
+        ]
+
+    if trace_id:
+        metrics = [
+            metric for metric in metrics
+            if metric.get("trace_id") == trace_id
         ]
 
     return {

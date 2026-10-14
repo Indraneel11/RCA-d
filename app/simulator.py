@@ -1,6 +1,6 @@
 import random
 import uuid
-from typing import List
+from typing import List, Literal
 
 from app.kafka_producer import (
     flush_events,
@@ -15,6 +15,13 @@ SERVICES = [
     "frontend-service",
     "order-service",
     "payment-service",
+]
+
+FailureType = Literal[
+    "none",
+    "payment_timeout",
+    "payment_error",
+    "order_error",
 ]
 
 
@@ -80,18 +87,19 @@ def create_trace(
     publish_trace_event(trace.model_dump())
 
 
-def simulate_request() -> dict:
+def simulate_request(failure_type: FailureType | None = None) -> dict:
     trace_id = generate_trace_id()
 
     frontend_span_id = generate_span_id()
     order_span_id = generate_span_id()
     payment_span_id = generate_span_id()
 
-    failure_type = random.choices(
-        ["none", "payment_timeout", "payment_error", "order_error"],
-        weights=[75, 10, 10, 5],
-        k=1,
-    )[0]
+    if failure_type is None:
+        failure_type = random.choices(
+            ["none", "payment_timeout", "payment_error", "order_error"],
+            weights=[75, 10, 10, 5],
+            k=1,
+        )[0]
 
     frontend_latency = random.uniform(20, 80)
     order_latency = random.uniform(50, 180)
@@ -170,8 +178,7 @@ def simulate_request() -> dict:
         trace_id,
     )
 
-    # An order processing failure happens before the payment call.
-    # Do not generate a payment span for a service that was never called.
+    # An order processing failure occurs before the payment call.
     if failure_type == "order_error":
         return {
             "trace_id": trace_id,
@@ -223,11 +230,14 @@ def simulate_request() -> dict:
     }
 
 
-def simulate_requests(count: int) -> List[dict]:
+def simulate_requests(
+    count: int,
+    failure_type: FailureType | None = None,
+) -> List[dict]:
     results = []
 
     for _ in range(count):
-        result = simulate_request()
+        result = simulate_request(failure_type=failure_type)
         results.append(result)
 
     flush_events()
