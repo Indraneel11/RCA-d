@@ -26,13 +26,23 @@ def build_evidence_summary(top_root_cause: Dict) -> str:
     error_log_count = evidence.get("error_log_count", 0)
     failed_trace_count = evidence.get("failed_trace_count", 0)
     high_latency_metric_count = evidence.get("high_latency_metric_count", 0)
+    correlated_trace_count = evidence.get("correlated_trace_count", 0)
+    upstream_services = evidence.get("upstream_failed_services", [])
 
-    return (
+    summary = (
         f"Evidence includes {incident_count} related incidents, "
         f"{error_log_count} ERROR logs, "
         f"{failed_trace_count} failed trace spans, and "
         f"{high_latency_metric_count} high-latency metrics."
     )
+
+    if correlated_trace_count:
+        summary += (
+            f" {correlated_trace_count} trace(s) also show failed calls from "
+            f"{', '.join(upstream_services)} to this dependency."
+        )
+
+    return summary
 
 
 def build_recommended_actions(top_root_cause: Dict) -> List[str]:

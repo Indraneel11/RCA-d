@@ -55,20 +55,58 @@ def build_observability_context(minutes: int | None = None) -> Dict:
     }
 
 
+def build_fallback_answer(context: Dict) -> str:
+    rca_explanation = context.get("rca_explanation", {})
+    explanation = rca_explanation.get("explanation")
+    root_cause_service = rca_explanation.get("root_cause_service")
+    confidence = rca_explanation.get("confidence")
+    recommended_actions = rca_explanation.get("recommended_actions", [])
+
+    if not explanation:
+        return (
+            "Gemini is currently unavailable, and RCA'd could not generate a "
+            "root cause explanation from the selected time window. Try expanding "
+            "the time window or generating fresh telemetry."
+        )
+
+    answer = (
+        "Gemini is currently unavailable, so RCA'd is returning the "
+        "rule-based RCA explanation instead.\n\n"
+    )
+
+    if root_cause_service:
+        answer += f"Likely root cause: {root_cause_service}\n"
+
+    if confidence:
+        answer += f"Confidence: {confidence}\n"
+
+    answer += f"\nExplanation: {explanation}\n"
+
+    if recommended_actions:
+        answer += "\nRecommended next checks:\n"
+
+        for action in recommended_actions:
+            answer += f"- {action}\n"
+
+    return answer
+
+
 def answer_observability_question(question: str, minutes: int | None = None) -> Dict:
     api_key = os.getenv("GEMINI_API_KEY")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+
+    context = build_observability_context(minutes=minutes)
 
     if not api_key:
         return {
-            "message": "GEMINI_API_KEY is not configured",
-            "answer": (
-                "Set GEMINI_API_KEY in your .env file before using "
-                "the Gemini query layer."
-            ),
+            "message": "Gemini API key is not configured",
+            "model": model_name,
+            "question": question,
+            "time_window_minutes": minutes,
+            "answer_source": "fallback",
+            "answer": build_fallback_answer(context),
+            "context_used": context,
         }
-
-    model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
-    context = build_observability_context(minutes=minutes)
 
     prompt = f"""
 You are an observability assistant for RCA'd, an AI-driven observability platform.
@@ -104,15 +142,19 @@ Observability context:
             "model": model_name,
             "question": question,
             "time_window_minutes": minutes,
+            "answer_source": "gemini",
             "answer": response.text,
             "context_used": context,
         }
 
     except Exception as error:
         return {
-            "message": "Gemini query failed",
+            "message": "Gemini query failed; returned fallback RCA explanation",
             "model": model_name,
             "question": question,
             "time_window_minutes": minutes,
+            "answer_source": "fallback",
+            "answer": build_fallback_answer(context),
             "error": str(error),
+            "context_used": context,
         }
